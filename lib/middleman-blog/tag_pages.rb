@@ -18,22 +18,25 @@ module Middleman
       # Get a path to the given tag, based on the :taglink setting.
       # @param [String] tag
       # @return [String]
-      def link(tag)
-        apply_uri_template @tag_link_template, tag: safe_parameterize(tag)
+      def link(tag, lang=nil)
+        lang ||= I18n.locale
+        apply_uri_template @tag_link_template, tag: safe_parameterize(tag), lang: lang
       end
 
       # Update the main sitemap resource list
       # @return [void]
       def manipulate_resource_list(resources)
-        resources + @blog_data.tags.map do |tag, articles|
-          tag_page_resource(tag, articles)
+        resources + @blog_data.tags.flat_map do |tag, articles|
+          @blog_data.tags[tag].group_by{|article| article.lang}.flat_map do |lang, local_articles|
+            tag_page_resource(tag, articles, lang, local_articles)
+          end
         end
       end
 
       private
 
-      def tag_page_resource(tag, articles)
-        Sitemap::Resource.new(@sitemap, link(tag)).tap do |p|
+      def tag_page_resource(tag, articles, lang, local_articles)
+        Sitemap::Resource.new(@sitemap, link(tag, lang)).tap do |p|
           p.proxy_to(@tag_template)
 
           # Add metadata in local variables so it's accessible to
@@ -42,7 +45,9 @@ module Middleman
             'page_type' => 'tag',
             'tagname' => tag,
             'articles' => articles,
-            'blog_controller' => @blog_controller
+            'local_articles' => local_articles,
+            'blog_controller' => @blog_controller,
+            'lang' => lang,
           }
         end
       end
